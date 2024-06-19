@@ -100,7 +100,7 @@ func createEntry(line string) (LogEntry, error) {
 	}
 
 	if src == "" || dest == "" || iface == "" {
-		return LogEntry{}, fmt.Errorf("ログファイルの解析でエラーが発生しました。ログファイルの形式が不正です: %s", line)
+		return LogEntry{}, fmt.Errorf("ログファイルの形式が不正です: src=%s, dest=%s, interface=%s", src, dest, iface)
 	}
 	entry := LogEntry{Src: src, Dest: dest, Interface: iface}
 	return entry, nil
