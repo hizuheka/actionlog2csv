@@ -44,21 +44,12 @@ func main() {
 				line := scanner.Text()
 				// "action="を含む行のみを対象とする
 				if strings.Contains(line, "action=") {
-					fields := strings.Fields(line)
-					var src, dest, iface string
-					for _, field := range fields {
-						switch {
-						case strings.HasPrefix(field, "src="):
-							src = strings.TrimPrefix(field, "src=")
-						case strings.HasPrefix(field, "dest="):
-							dest = strings.TrimPrefix(field, "dest=")
-						case strings.HasPrefix(field, "interface="):
-							iface = strings.TrimPrefix(field, "interface=")
-						}
+					if entry, err := createEntry(line); err != nil {
+						return fmt.Errorf("ログファイルの解析でエラーが発生しました: %v", err)
+					} else {
+						// 重複を排除するために、entryをキーにする
+						logEntries[entry] = struct{}{}
 					}
-					entry := LogEntry{Src: src, Dest: dest, Interface: iface}
-					// 重複を排除するために、entryをキーにする
-					logEntries[entry] = struct{}{}
 				}
 			}
 
@@ -92,4 +83,25 @@ func main() {
 	for entry := range logEntries {
 		writer.Write([]string{entry.Src, entry.Dest, entry.Interface})
 	}
+}
+
+func createEntry(line string) (LogEntry, error) {
+	fields := strings.Fields(line)
+	var src, dest, iface string
+	for _, field := range fields {
+		switch {
+		case strings.HasPrefix(field, "src="):
+			src = strings.TrimPrefix(field, "src=")
+		case strings.HasPrefix(field, "dest="):
+			dest = strings.TrimPrefix(field, "dest=")
+		case strings.HasPrefix(field, "interface="):
+			iface = strings.TrimPrefix(field, "interface=")
+		}
+	}
+
+	if src == "" || dest == "" || iface == "" {
+		return LogEntry{}, fmt.Errorf("ログファイルの解析でエラーが発生しました。ログファイルの形式が不正です: %s", line)
+	}
+	entry := LogEntry{Src: src, Dest: dest, Interface: iface}
+	return entry, nil
 }
