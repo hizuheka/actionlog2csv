@@ -12,8 +12,11 @@ import (
 // LogEntry はログファイルの各エントリを表します。
 type LogEntry struct {
 	Src       string
-	Dest      string
+	Dst       string
 	Interface string
+	Dir       string
+	Action    string
+	Rule      string
 }
 
 func main() {
@@ -77,31 +80,37 @@ func main() {
 	defer writer.Flush()
 
 	// ヘッダーを書き込む
-	writer.Write([]string{"src", "dest", "interface"})
+	writer.Write([]string{"src", "dst", "interface", "dir", "action", "rule"})
 
 	// ログエントリを書き込む
 	for entry := range logEntries {
-		writer.Write([]string{entry.Src, entry.Dest, entry.Interface})
+		writer.Write([]string{entry.Src, entry.Dst, entry.Interface})
 	}
 }
 
 func createEntry(line string) (LogEntry, error) {
 	fields := strings.Fields(line)
-	var src, dest, iface string
+	var src, dst, iface, dir, action, rule string
 	for _, field := range fields {
 		switch {
 		case strings.HasPrefix(field, "src="):
 			src = strings.TrimPrefix(field, "src=")
-		case strings.HasPrefix(field, "dest="):
-			dest = strings.TrimPrefix(field, "dest=")
+		case strings.HasPrefix(field, "dst="):
+			dst = strings.TrimPrefix(field, "dst=")
 		case strings.HasPrefix(field, "interface="):
 			iface = strings.TrimPrefix(field, "interface=")
+		case strings.HasPrefix(field, "dir="):
+			dir = strings.TrimPrefix(field, "dir=")
+		case strings.HasPrefix(field, "action="):
+			action = strings.TrimPrefix(field, "action=")
+		case strings.HasPrefix(field, "rule="):
+			rule = strings.TrimPrefix(field, "rule=")
 		}
 	}
 
-	if src == "" || dest == "" || iface == "" {
-		return LogEntry{}, fmt.Errorf("ログファイルの形式が不正です: src=%s, dest=%s, interface=%s", src, dest, iface)
+	if src == "" || dst == "" || iface == "" || dir == "" || action == "" || rule == "" {
+		return LogEntry{}, fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", src, dst, iface, dir, action, rule)
 	}
-	entry := LogEntry{Src: src, Dest: dest, Interface: iface}
+	entry := LogEntry{Src: src, Dst: dst, Interface: iface, Dir: dir, Action: action, Rule: rule}
 	return entry, nil
 }
