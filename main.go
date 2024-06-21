@@ -36,6 +36,7 @@ func main() {
 			return err
 		}
 		if !info.IsDir() {
+			fmt.Printf("対象ファイル: %s\r\n", info.Name())
 			file, err := os.Open(path)
 			if err != nil {
 				return fmt.Errorf("ログファイルを開くことができません: %v", err)
@@ -80,11 +81,11 @@ func main() {
 	defer writer.Flush()
 
 	// ヘッダーを書き込む
-	writer.Write([]string{"src", "dst", "interface", "dir", "action", "rule"})
+	writer.Write([]string{"action", "src", "dst", "interface", "dir", "rule"})
 
 	// ログエントリを書き込む
 	for entry := range logEntries {
-		writer.Write([]string{entry.Src, entry.Dst, entry.Interface})
+		writer.Write([]string{entry.Action, entry.Src, entry.Dst, entry.Interface, entry.Dir, entry.Rule})
 	}
 }
 
