@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -20,18 +21,23 @@ type LogEntry struct {
 }
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Println("使用法: actionlog2csv.exe <ログフォルダパス> <出力ファイルパス>")
+	if len(os.Args) != 4 {
+		fmt.Println("使用法: actionlog2csv.exe <ログフォルダパス> <出力ファイルパス> <ワーカー数>")
 		return
 	}
 
 	folderPath := os.Args[1]
 	outputFilePath := os.Args[2]
+	numWorkers, err := strconv.Atoi(os.Args[3])
+	if err != nil || numWorkers <= 0 {
+		fmt.Println("ワーカー数は正の整数で指定してください")
+		return
+	}
 
 	var logEntries = make(map[LogEntry]struct{})
 
 	// フォルダ内の全てのログファイルを解析
-	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
