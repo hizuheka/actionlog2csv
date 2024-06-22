@@ -95,6 +95,37 @@ func main() {
 	}
 }
 
+func processFile(path string) map[LogEntry]struct{} {
+	fmt.Printf("対象ファイル: %s\r\n", path)
+	file, err := os.Open(path)
+	if err != nil {
+		fmt.Printf("ログファイルを開くことができません: path=%s, error=%v\n", path, err)
+		return nil
+	}
+	defer file.Close()
+
+	logEntries := make(map[LogEntry]struct{})
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// "action="を含む行のみを対象とする
+		if strings.Contains(line, "action=") {
+			if entry, err := createEntry(line); err != nil {
+				fmt.Printf("ログファイルの解析でエラーが発生しました: path=%s, error=%v\n", path, err)
+			} else {
+				// 重複を排除するために、entryをキーにする
+				logEntries[entry] = struct{}{}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("ログファイルの読み取り中にエラーが発生しました: path=%s, error=%v\n", path, err)
+	}
+
+	return logEntries
+}
+
 func createEntry(line string) (LogEntry, error) {
 	fields := strings.Fields(line)
 	var src, dst, iface, dir, action, rule string
