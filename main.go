@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // LogEntry はログファイルの各エントリを表します。
@@ -34,52 +35,65 @@ func main() {
 		return
 	}
 
-	var logEntries = make(map[LogEntry]struct{})
+	var wg sync.WaitGroup
 
-	// フォルダ内の全てのログファイルを解析
-	err = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			fmt.Printf("対象ファイル: %s\r\n", info.Name())
-			file, err := os.Open(path)
-			if err != nil {
-				return fmt.Errorf("ログファイルを開くことができません: %v", err)
+	fileChan := make(chan string)
+	resultChan := make(chan map[LogEntry]struct{})
+
+	// ワーカーを起動
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range fileChan {
+				entries := processFile(path)
+				resultChan <- entries
 			}
-			defer file.Close()
-
-			scanner := bufio.NewScanner(file)
-			for scanner.Scan() {
-				line := scanner.Text()
-				// "action="を含む行のみを対象とする
-				if strings.Contains(line, "action=") {
-					if entry, err := createEntry(line); err != nil {
-						return fmt.Errorf("ログファイルの解析でエラーが発生しました: %v", err)
-					} else {
-						// 重複を排除するために、entryをキーにする
-						logEntries[entry] = struct{}{}
-					}
-				}
-			}
-
-			if err := scanner.Err(); err != nil {
-				return fmt.Errorf("ログファイルの読み取り中にエラーが発生しました: %v", err)
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		fmt.Printf("フォルダ内のファイルを処理中にエラーが発生しました: %v\n", err)
-		return
+		}()
 	}
 
+	// フォルダ内の全てのログファイルを解析
+	go func() {
+		defer close(fileChan)
+		err = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				fileChan <- path
+			}
+			return nil
+		})
+
+		if err != nil {
+			fmt.Printf("フォルダ内のファイルを処理中にエラーが発生しました: %v\n", err)
+		}
+	}()
+
+	// 結果を集約
+	var logEntries = make(map[LogEntry]struct{})
+	go func() {
+		for entries := range resultChan {
+			for entry := range entries {
+				logEntries[entry] = struct{}{}
+			}
+		}
+	}()
+
+	wg.Wait()
+	close(resultChan)
+
+	if err := writeOutputFile(outputFilePath, logEntries); err != nil {
+		fmt.Printf("ファイル出力でエラーが発生しました: %v\n", err)
+		return
+	}
+}
+
+func writeOutputFile(outputFilePath string, logEntries map[LogEntry]struct{}) error {
 	// 出力ファイルを開く
 	outputFile, err := os.Create(outputFilePath)
 	if err != nil {
-		fmt.Printf("出力ファイルを作成できません: %v\n", err)
-		return
+		return err
 	}
 	defer outputFile.Close()
 
@@ -91,8 +105,12 @@ func main() {
 
 	// ログエントリを書き込む
 	for entry := range logEntries {
-		writer.Write([]string{entry.Action, entry.Src, entry.Dst, entry.Interface, entry.Dir, entry.Rule})
+		if err := writer.Write([]string{entry.Action, entry.Src, entry.Dst, entry.Interface, entry.Dir, entry.Rule}); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func processFile(path string) map[LogEntry]struct{} {
