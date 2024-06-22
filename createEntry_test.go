@@ -7,68 +7,96 @@ import (
 
 // TestCreateEntry 関数のテスト
 func TestCreateEntry(t *testing.T) {
-	testCases := []struct {
-		name          string
-		inputLine     string
-		expectedEntry LogEntry
-		expectedError error
+	tests := []struct {
+		line        string
+		expected    LogEntry
+		expectError error
 	}{
 		{
-			name:          "Case 0",
-			inputLine:     "2024 May 28 14:12:01 : firewall INFO[55555555]: TCP connection initiated.  src=192.100.1.200 dst=192.100.2.244 proto=tcp srcport=88888 dstport=77777 interface=bnd1 dir=inbound action=accept rule=123 time=2024-05-28T14:12:01",
-			expectedEntry: LogEntry{Src: "192.100.1.200", Dst: "192.100.2.244", Interface: "bnd1", Dir: "inbound", Action: "accept", Rule: "123"},
-			expectedError: nil,
+			line:        "2024 May 28 14:12:01 : firewall INFO[55555555]: TCP connection initiated.  src=192.100.1.200 dst=192.100.2.244 proto=tcp srcport=88888 dstport=77777 interface=bnd1 dir=inbound action=accept rule=123 time=2024-05-28T14:12:01",
+			expected:    LogEntry{Src: "192.100.1.200", Dst: "192.100.2.244", Interface: "bnd1", Dir: "inbound", Action: "accept", Rule: "123"},
+			expectError: nil,
 		},
 		{
-			name:          "Case 1: Basic input",
-			inputLine:     "src=192.168.1.1 dst=192.168.1.2 interface=eth0 dir=outbound action=reject rule=999",
-			expectedEntry: LogEntry{Src: "192.168.1.1", Dst: "192.168.1.2", Interface: "eth0", Dir: "outbound", Action: "reject", Rule: "999"},
-			expectedError: nil,
+			line: "src=192.168.1.1 dst=192.168.1.2 interface=eth0 dir=in action=allow rule=1",
+			expected: LogEntry{
+				Src:       "192.168.1.1",
+				Dst:       "192.168.1.2",
+				Interface: "eth0",
+				Dir:       "in",
+				Action:    "allow",
+				Rule:      "1",
+			},
+			expectError: nil,
 		},
 		{
-			name:          "Case 2: Missing src field",
-			inputLine:     "dst=10.0.0.2 interface=eth1",
-			expectedEntry: LogEntry{},
-			expectedError: fmt.Errorf("ログファイルの形式が不正です: src=, dst=10.0.0.2, interface=eth1, dir=, action=, rule="),
+			line:        "src=192.168.1.1 dst=192.168.1.2 interface=eth0 dir=in action=allow",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "192.168.1.2", "eth0", "in", "allow", ""),
 		},
 		{
-			name:          "Case 3: Missing dst field",
-			inputLine:     "src=172.16.0.1 interface=eth2",
-			expectedEntry: LogEntry{},
-			expectedError: fmt.Errorf("ログファイルの形式が不正です: src=172.16.0.1, dst=, interface=eth2, dir=, action=, rule="),
+			line:        "",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "", "", "", "", "", ""),
 		},
 		{
-			name:          "Case 4: Missing interface field",
-			inputLine:     "src=8.8.8.8 dst=8.8.4.4",
-			expectedEntry: LogEntry{},
-			expectedError: fmt.Errorf("ログファイルの形式が不正です: src=8.8.8.8, dst=8.8.4.4, interface=, dir=, action=, rule="),
+			line: "src=10.0.0.1 dst=10.0.0.2 interface=wlan0 dir=out action=deny rule=2",
+			expected: LogEntry{
+				Src:       "10.0.0.1",
+				Dst:       "10.0.0.2",
+				Interface: "wlan0",
+				Dir:       "out",
+				Action:    "deny",
+				Rule:      "2",
+			},
+			expectError: nil,
 		},
 		{
-			name:          "Case 5: Empty input line",
-			inputLine:     "",
-			expectedEntry: LogEntry{},
-			expectedError: fmt.Errorf("ログファイルの形式が不正です: src=, dst=, interface=, dir=, action=, rule="),
+			line:        "dst=192.168.1.2 interface=eth0 dir=in action=allow rule=1",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "", "192.168.1.2", "eth0", "in", "allow", "1"),
+		},
+		{
+			line:        "src=192.168.1.1 interface=eth0 dir=in action=allow rule=1",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "", "eth0", "in", "allow", "1"),
+		},
+		{
+			line:        "src=192.168.1.1 dst=192.168.1.2 dir=in action=allow rule=1",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "192.168.1.2", "", "in", "allow", "1"),
+		},
+		{
+			line:        "src=192.168.1.1 dst=192.168.1.2 interface=eth0 action=allow rule=1",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "192.168.1.2", "eth0", "", "allow", "1"),
+		},
+		{
+			line:        "src=192.168.1.1 dst=192.168.1.2 interface=eth0 dir=in rule=1",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "192.168.1.2", "eth0", "in", "", "1"),
+		},
+		{
+			line:        "src=192.168.1.1 dst=192.168.1.2 interface=eth0 dir=in action=allow",
+			expected:    LogEntry{},
+			expectError: fmt.Errorf("ログファイルの形式が不正です: src=%s, dst=%s, interface=%s, dir=%s, action=%s, rule=%s", "192.168.1.1", "192.168.1.2", "eth0", "in", "allow", ""),
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			entry, err := createEntry(tc.inputLine)
-
-			if err != nil {
-				if tc.expectedError == nil {
-					t.Fatalf("Expected no error, but got error: %v", err)
-				}
-				if err.Error() != tc.expectedError.Error() {
-					t.Errorf("Expected error message '%v', but got '%v'", tc.expectedError, err)
-				}
-			} else {
-				if tc.expectedError != nil {
-					t.Errorf("Expected error '%v', but got no error", tc.expectedError)
-				}
-				if entry != tc.expectedEntry {
-					t.Errorf("Expected entry '%v', but got '%v'", tc.expectedEntry, entry)
-				}
+	for _, tt := range tests {
+		t.Run(tt.line, func(t *testing.T) {
+			actual, err := createEntry(tt.line)
+			if tt.expectError == nil && err != nil {
+				t.Errorf("expected no error, but got: %v", err)
+			}
+			if tt.expectError != nil && err == nil {
+				t.Errorf("expected error: %v, but got none", tt.expectError)
+			}
+			if tt.expectError != nil && err != nil && err.Error() != tt.expectError.Error() {
+				t.Errorf("expected error: %v, but got: %v", tt.expectError, err)
+			}
+			if actual != tt.expected {
+				t.Errorf("expected: %v, got: %v", tt.expected, actual)
 			}
 		})
 	}
