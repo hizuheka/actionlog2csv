@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
 	"fmt"
 	"os"
@@ -36,18 +37,33 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background()) // contextとキャンセル関数を定義
+	// defer cancel()  // main関数で実行するので今回は不要（のはず）
 
 	fileChan := make(chan string)
 	resultChan := make(chan map[LogEntry]struct{})
+	errChan := make(chan error, numWorkers)
 
 	// ワーカーを起動
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			select {
+			case <-ctx.Done(): // contextのCancelが呼び出されたらここに入って即終了する
+				return
+			default:
+			}
+
 			for path := range fileChan {
-				entries := processFile(path)
-				resultChan <- entries
+				if entries, err := processFile(path); err != nil {
+					errChan <- err
+					// エラーが発生したら他の処理はキャンセル
+					cancel()
+				} else {
+					resultChan <- entries
+				}
 			}
 		}()
 	}
@@ -82,6 +98,12 @@ func main() {
 
 	wg.Wait()
 	close(resultChan)
+	close(errChan)
+
+	for err := range errChan {
+		fmt.Printf("ファイルの解析でエラーが発生しました: %v\n", err)
+		return
+	}
 
 	if err := writeOutputFile(outputFilePath, logEntries); err != nil {
 		fmt.Printf("ファイル出力でエラーが発生しました: %v\n", err)
@@ -113,12 +135,11 @@ func writeOutputFile(outputFilePath string, logEntries map[LogEntry]struct{}) er
 	return nil
 }
 
-func processFile(path string) map[LogEntry]struct{} {
+func processFile(path string) (map[LogEntry]struct{}, error) {
 	fmt.Printf("対象ファイル: %s\r\n", path)
 	file, err := os.Open(path)
 	if err != nil {
-		fmt.Printf("ログファイルを開くことができません: path=%s, error=%v\n", path, err)
-		return nil
+		return nil, fmt.Errorf("ログファイルを開くことができません: path=%s, error=%s", path, err)
 	}
 	defer file.Close()
 
@@ -129,7 +150,7 @@ func processFile(path string) map[LogEntry]struct{} {
 		// "action="を含む行のみを対象とする
 		if strings.Contains(line, "action=") {
 			if entry, err := createEntry(line); err != nil {
-				fmt.Printf("ログファイルの解析でエラーが発生しました: path=%s, error=%v\n", path, err)
+				return nil, fmt.Errorf("ログファイルの解析でエラーが発生しました: path=%s, error=%s", path, err)
 			} else {
 				// 重複を排除するために、entryをキーにする
 				logEntries[entry] = struct{}{}
@@ -138,10 +159,10 @@ func processFile(path string) map[LogEntry]struct{} {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("ログファイルの読み取り中にエラーが発生しました: path=%s, error=%v\n", path, err)
+		return nil, fmt.Errorf("ログファイルの読み取り中にエラーが発生しました: path=%s, error=%s", path, err)
 	}
 
-	return logEntries
+	return logEntries, nil
 }
 
 func createEntry(line string) (LogEntry, error) {
