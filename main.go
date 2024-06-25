@@ -75,6 +75,13 @@ func main() {
 			if err != nil {
 				return err
 			}
+
+			select {
+			case <-ctx.Done(): // contextのCancelが呼び出されたらここに入って即終了する
+				return nil
+			default:
+			}
+
 			if !info.IsDir() {
 				fileChan <- path
 			}
